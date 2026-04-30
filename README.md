@@ -8,7 +8,8 @@ A small Python project that uses the OpenAI Images API to generate images from t
 - Optional reference-image editing mode with `--reference-image` / `--image`
 - ChatGPT-like aspect ratio presets with `--ratio` / `--aspect-ratio`
 - Saves generated images to `outputs/`
-- Saves generation metadata (including ratio when used) next to each image
+- Saves generation metadata (including ratio, token counts, and cost estimate) next to each image
+- Token and cost tracking: when the API returns usage, output cost is calculated at $30.00/1M output tokens and input cost at $5.00/1M text + $8.00/1M image tokens; falls back to per-image table pricing when usage is absent. The `estimated` flag in the cost object is `true` whenever any component uses an estimate or approximation
 - CLI options for prompt, size, quality, model, number of images, reference image, and ratio
 - Safe `.env.example` template for local API key setup
 
