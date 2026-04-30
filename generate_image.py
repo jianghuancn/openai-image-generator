@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import binascii
 import json
 import os
 import time
@@ -273,7 +274,10 @@ def decode_image(item: Any) -> bytes:
     """Decode an image response item into bytes."""
     b64 = _get_attr_or_key(item, "b64_json")
     if b64:
-        return base64.b64decode(b64)
+        try:
+            return base64.b64decode(b64, validate=True)
+        except binascii.Error as exc:
+            raise ValueError("Invalid base64 image data returned by the API") from exc
     raise ValueError("No base64 image data returned by the API")
 
 

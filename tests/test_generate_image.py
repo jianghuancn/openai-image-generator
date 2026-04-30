@@ -67,6 +67,13 @@ class TestDecodeImage:
         with pytest.raises(ValueError, match="No base64"):
             decode_image(item)
 
+    def test_raises_value_error_when_b64_json_is_invalid(self):
+        from generate_image import decode_image
+
+        item = SimpleNamespace(b64_json="!!!!")
+        with pytest.raises(ValueError, match="Invalid base64"):
+            decode_image(item)
+
 
 # ── build_metadata ────────────────────────────────────────────────────────────
 
