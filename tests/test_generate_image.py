@@ -317,3 +317,316 @@ class TestRun:
         assert meta["prompt"] == "a dog"
         assert "paths" in meta
         assert "created_at" in meta
+
+
+# ── resolve_size ──────────────────────────────────────────────────────────────
+
+class TestResolveSize:
+    def test_returns_default_when_neither_size_nor_ratio(self):
+        from generate_image import resolve_size
+
+        assert resolve_size(None, None) == "1024x1024"
+
+    def test_returns_explicit_size_unchanged(self):
+        from generate_image import resolve_size
+
+        assert resolve_size("512x512", None) == "512x512"
+
+    def test_explicit_size_overrides_ratio(self):
+        from generate_image import resolve_size
+
+        assert resolve_size("512x512", "portrait") == "512x512"
+
+    def test_square_maps_to_1024x1024(self):
+        from generate_image import resolve_size
+
+        assert resolve_size(None, "square") == "1024x1024"
+
+    def test_portrait_maps_to_1024x1536(self):
+        from generate_image import resolve_size
+
+        assert resolve_size(None, "portrait") == "1024x1536"
+
+    def test_landscape_maps_to_1536x1024(self):
+        from generate_image import resolve_size
+
+        assert resolve_size(None, "landscape") == "1536x1024"
+
+    def test_vertical_maps_to_1024x1792(self):
+        from generate_image import resolve_size
+
+        assert resolve_size(None, "vertical") == "1024x1792"
+
+    def test_wide_maps_to_1792x1024(self):
+        from generate_image import resolve_size
+
+        assert resolve_size(None, "wide") == "1792x1024"
+
+    def test_1_1_maps_to_1024x1024(self):
+        from generate_image import resolve_size
+
+        assert resolve_size(None, "1:1") == "1024x1024"
+
+    def test_2_3_maps_to_1024x1536(self):
+        from generate_image import resolve_size
+
+        assert resolve_size(None, "2:3") == "1024x1536"
+
+    def test_3_2_maps_to_1536x1024(self):
+        from generate_image import resolve_size
+
+        assert resolve_size(None, "3:2") == "1536x1024"
+
+    def test_9_16_maps_to_1024x1792(self):
+        from generate_image import resolve_size
+
+        assert resolve_size(None, "9:16") == "1024x1792"
+
+    def test_16_9_maps_to_1792x1024(self):
+        from generate_image import resolve_size
+
+        assert resolve_size(None, "16:9") == "1792x1024"
+
+    def test_unknown_ratio_raises_value_error(self):
+        from generate_image import resolve_size
+
+        with pytest.raises(ValueError, match="Unknown ratio"):
+            resolve_size(None, "bad")
+
+
+# ── parse_args — --ratio / --aspect-ratio option ──────────────────────────────
+
+class TestParseArgsRatio:
+    def test_ratio_long_form(self):
+        from generate_image import parse_args
+
+        args = parse_args(["--prompt", "test", "--ratio", "square"])
+        assert args.ratio == "square"
+
+    def test_aspect_ratio_alias(self):
+        from generate_image import parse_args
+
+        args = parse_args(["--prompt", "test", "--aspect-ratio", "portrait"])
+        assert args.ratio == "portrait"
+
+    def test_ratio_defaults_to_none(self):
+        from generate_image import parse_args
+
+        args = parse_args(["--prompt", "test"])
+        assert args.ratio is None
+
+    def test_ratio_accepts_all_choices(self):
+        from generate_image import parse_args
+
+        choices = ["square", "portrait", "landscape", "vertical", "wide",
+                   "1:1", "2:3", "3:2", "9:16", "16:9"]
+        for choice in choices:
+            args = parse_args(["--prompt", "x", "--ratio", choice])
+            assert args.ratio == choice
+
+    def test_invalid_ratio_choice_exits(self):
+        from generate_image import parse_args
+
+        with pytest.raises(SystemExit):
+            parse_args(["--prompt", "x", "--ratio", "invalid"])
+
+    def test_size_default_is_none(self):
+        from generate_image import parse_args
+
+        args = parse_args(["--prompt", "test"])
+        assert args.size is None
+
+
+# ── build_metadata — ratio field ──────────────────────────────────────────────
+
+class TestBuildMetadataRatio:
+    def test_includes_ratio_when_provided(self):
+        from generate_image import build_metadata
+
+        meta = build_metadata(
+            model="gpt-image-1",
+            prompt="a dog",
+            size="1024x1536",
+            quality="medium",
+            n=1,
+            paths=[],
+            timestamp="20260101-120000",
+            ratio="portrait",
+        )
+        assert meta["ratio"] == "portrait"
+
+    def test_excludes_ratio_when_none(self):
+        from generate_image import build_metadata
+
+        meta = build_metadata(
+            model="gpt-image-1",
+            prompt="a dog",
+            size="1024x1024",
+            quality="medium",
+            n=1,
+            paths=[],
+            timestamp="20260101-120000",
+        )
+        assert "ratio" not in meta
+
+    def test_size_present_alongside_ratio(self):
+        from generate_image import build_metadata
+
+        meta = build_metadata(
+            model="gpt-image-1",
+            prompt="a dog",
+            size="1024x1536",
+            quality="medium",
+            n=1,
+            paths=[],
+            timestamp="20260101-120000",
+            ratio="portrait",
+        )
+        assert meta["size"] == "1024x1536"
+        assert meta["ratio"] == "portrait"
+
+
+# ── run() — ratio integration ─────────────────────────────────────────────────
+
+class TestRunRatio:
+    def test_generate_receives_resolved_size_from_ratio(self, tmp_path):
+        from generate_image import run
+
+        client = _mock_generate_client()
+        run(client, "gpt-image-1", "a dog", "1024x1536", "medium", 1,
+            tmp_path, "ts", ratio="portrait")
+        kw = client.images.generate.call_args.kwargs
+        assert kw["size"] == "1024x1536"
+
+    def test_metadata_includes_ratio_when_provided(self, tmp_path):
+        from generate_image import run
+
+        client = _mock_generate_client()
+        meta = run(client, "gpt-image-1", "a dog", "1024x1536", "medium", 1,
+                   tmp_path, "ts", ratio="portrait")
+        assert meta["ratio"] == "portrait"
+        assert meta["size"] == "1024x1536"
+
+    def test_metadata_excludes_ratio_when_not_provided(self, tmp_path):
+        from generate_image import run
+
+        client = _mock_generate_client()
+        meta = run(client, "gpt-image-1", "a dog", "1024x1024", "medium", 1,
+                   tmp_path, "ts")
+        assert "ratio" not in meta
+
+    def test_edit_receives_resolved_size_from_ratio(self, tmp_path):
+        from generate_image import run
+
+        client = _mock_edit_client()
+        ref = tmp_path / "ref.png"
+        ref.write_bytes(b"REF")
+        outdir = tmp_path / "out"
+        run(client, "gpt-image-1", "a dog", "1792x1024", "medium", 1,
+            outdir, "ts", reference_image=str(ref), ratio="wide")
+        kw = client.images.edit.call_args.kwargs
+        assert kw["size"] == "1792x1024"
+
+
+# ── validate_edit_ratio_compat — edit mode rejects unsupported ratios ──────────
+
+_EDIT_UNSUPPORTED_RATIOS = ["vertical", "9:16", "wide", "16:9"]
+_EDIT_SUPPORTED_RATIOS = ["square", "portrait", "landscape", "1:1", "2:3", "3:2"]
+
+
+class TestValidateEditRatioCompat:
+    """validate_edit_ratio_compat(ratio, explicit_size, reference_image) raises
+    SystemExit when edit mode is active (reference_image set), no explicit size
+    override is given, and the ratio resolves to a size unsupported by the edit API.
+    """
+
+    def _call(self, ratio, explicit_size, reference_image):
+        from generate_image import validate_edit_ratio_compat
+        validate_edit_ratio_compat(ratio, explicit_size, reference_image)
+
+    # --- ratios that must be rejected in edit mode ---
+
+    def test_vertical_rejected_in_edit_mode(self):
+        with pytest.raises(SystemExit):
+            self._call("vertical", None, "ref.png")
+
+    def test_9_16_rejected_in_edit_mode(self):
+        with pytest.raises(SystemExit):
+            self._call("9:16", None, "ref.png")
+
+    def test_wide_rejected_in_edit_mode(self):
+        with pytest.raises(SystemExit):
+            self._call("wide", None, "ref.png")
+
+    def test_16_9_rejected_in_edit_mode(self):
+        with pytest.raises(SystemExit):
+            self._call("16:9", None, "ref.png")
+
+    # --- error message must be informative ---
+
+    def test_rejection_message_names_the_ratio(self):
+        with pytest.raises(SystemExit) as exc_info:
+            self._call("vertical", None, "ref.png")
+        assert "vertical" in str(exc_info.value).lower() or "vertical" in str(exc_info.value)
+
+    def test_rejection_message_mentions_edit_mode(self):
+        with pytest.raises(SystemExit) as exc_info:
+            self._call("wide", None, "ref.png")
+        msg = str(exc_info.value).lower()
+        assert "edit" in msg or "reference" in msg
+
+    # --- ratios that must be accepted in edit mode ---
+
+    def test_square_accepted_in_edit_mode(self):
+        self._call("square", None, "ref.png")  # must not raise
+
+    def test_portrait_accepted_in_edit_mode(self):
+        self._call("portrait", None, "ref.png")
+
+    def test_landscape_accepted_in_edit_mode(self):
+        self._call("landscape", None, "ref.png")
+
+    def test_1_1_accepted_in_edit_mode(self):
+        self._call("1:1", None, "ref.png")
+
+    def test_2_3_accepted_in_edit_mode(self):
+        self._call("2:3", None, "ref.png")
+
+    def test_3_2_accepted_in_edit_mode(self):
+        self._call("3:2", None, "ref.png")
+
+    # --- explicit --size overrides ratio: no rejection even for unsupported ratios ---
+
+    def test_explicit_size_overrides_vertical_ratio(self):
+        self._call("vertical", "1024x1024", "ref.png")  # must not raise
+
+    def test_explicit_size_overrides_wide_ratio(self):
+        self._call("wide", "1536x1024", "ref.png")  # must not raise
+
+    def test_explicit_size_overrides_9_16_ratio(self):
+        self._call("9:16", "1024x1024", "ref.png")  # must not raise
+
+    def test_explicit_size_overrides_16_9_ratio(self):
+        self._call("16:9", "1024x1536", "ref.png")  # must not raise
+
+    # --- no reference image: text-only generation, all ratios allowed ---
+
+    def test_vertical_allowed_in_text_only_mode(self):
+        self._call("vertical", None, None)  # must not raise
+
+    def test_wide_allowed_in_text_only_mode(self):
+        self._call("wide", None, None)  # must not raise
+
+    def test_9_16_allowed_in_text_only_mode(self):
+        self._call("9:16", None, None)  # must not raise
+
+    def test_16_9_allowed_in_text_only_mode(self):
+        self._call("16:9", None, None)  # must not raise
+
+    # --- no ratio set: nothing to validate ---
+
+    def test_no_ratio_in_edit_mode_is_allowed(self):
+        self._call(None, None, "ref.png")  # must not raise
+
+    def test_no_ratio_no_reference_image_is_allowed(self):
+        self._call(None, None, None)  # must not raise
