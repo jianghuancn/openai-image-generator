@@ -5,9 +5,10 @@ A small Python project that uses the OpenAI Images API to generate images from t
 ## Features
 
 - Text-to-image generation with OpenAI image models
+- Optional reference-image editing mode with `--reference-image` / `--image`
 - Saves generated images to `outputs/`
 - Saves generation metadata next to each image
-- CLI options for prompt, size, quality, model, and number of images
+- CLI options for prompt, size, quality, model, number of images, and reference image
 - Safe `.env.example` template for local API key setup
 
 ## Requirements
@@ -43,6 +44,18 @@ python generate_image.py \
   --quality medium
 ```
 
+Use a reference image for edit / variation workflows:
+
+```bash
+python generate_image.py \
+  --prompt "Turn this into a polished Douyin thumbnail with dramatic lighting, clean title space, and high contrast" \
+  --reference-image ./reference.png \
+  --size 1024x1024 \
+  --quality medium
+```
+
+`--image` is a shorter alias for `--reference-image`.
+
 Generated files are saved under `outputs/<timestamp>/`.
 
 ## CLI usage
@@ -58,6 +71,7 @@ Options:
 - `--size`: Image size, default `1024x1024`
 - `--quality`: `low`, `medium`, `high`, or `auto`; default `medium`
 - `--n`: Number of images to generate; default `1`
+- `--reference-image`, `--image`: Optional local image path. When provided, the script uses OpenAI image edit mode and includes the reference path in `metadata.json`.
 - `--outdir`: Output folder; default `outputs/<timestamp>`
 
 ## Example prompts

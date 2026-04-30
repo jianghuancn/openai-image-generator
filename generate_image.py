@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate images with OpenAI.")
     parser.add_argument("--prompt", required=True, help="Text prompt for image generation")
     parser.add_argument("--model", default="gpt-image-1", help="OpenAI image model")
@@ -32,7 +32,14 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Output directory. Defaults to outputs/<timestamp>",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--reference-image",
+        "--image",
+        dest="reference_image",
+        default=None,
+        help="Path to a reference image for image editing mode",
+    )
+    return parser.parse_args(argv)
 
 
 def decode_image(item: Any) -> bytes:
@@ -40,6 +47,88 @@ def decode_image(item: Any) -> bytes:
     if getattr(item, "b64_json", None):
         return base64.b64decode(item.b64_json)
     raise ValueError("No base64 image data returned by the API")
+
+
+def build_metadata(
+    model: str,
+    prompt: str,
+    size: str,
+    quality: str,
+    n: int,
+    paths: list[str],
+    timestamp: str,
+    reference_image: str | None = None,
+) -> dict[str, Any]:
+    meta: dict[str, Any] = {
+        "model": model,
+        "prompt": prompt,
+        "size": size,
+        "quality": quality,
+        "n": n,
+        "paths": paths,
+        "created_at": timestamp,
+    }
+    if reference_image is not None:
+        meta["reference_image"] = reference_image
+    return meta
+
+
+def save_images(items: list[Any], outdir: Path) -> list[str]:
+    outdir.mkdir(parents=True, exist_ok=True)
+    paths: list[str] = []
+    for index, item in enumerate(items, start=1):
+        image_path = outdir / f"image_{index}.png"
+        image_path.write_bytes(decode_image(item))
+        paths.append(str(image_path))
+    return paths
+
+
+def run(
+    client: Any,
+    model: str,
+    prompt: str,
+    size: str,
+    quality: str,
+    n: int,
+    outdir: Path,
+    timestamp: str,
+    reference_image: str | None = None,
+) -> dict[str, Any]:
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    if reference_image is None:
+        result = client.images.generate(
+            model=model,
+            prompt=prompt,
+            size=size,
+            quality=quality,
+            n=n,
+        )
+    else:
+        with open(reference_image, "rb") as image_file:
+            result = client.images.edit(
+                model=model,
+                prompt=prompt,
+                size=size,
+                quality=quality,
+                n=n,
+                image=image_file,
+            )
+
+    paths = save_images(result.data, outdir)
+    meta = build_metadata(
+        model=model,
+        prompt=prompt,
+        size=size,
+        quality=quality,
+        n=n,
+        paths=paths,
+        timestamp=timestamp,
+        reference_image=reference_image,
+    )
+    (outdir / "metadata.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
+    return meta
 
 
 def main() -> None:
@@ -56,32 +145,17 @@ def main() -> None:
     outdir.mkdir(parents=True, exist_ok=True)
 
     client = OpenAI()
-    result = client.images.generate(
-        model=args.model,
-        prompt=args.prompt,
-        size=args.size,
-        quality=args.quality,
-        n=args.n,
+    metadata = run(
+        client,
+        args.model,
+        args.prompt,
+        args.size,
+        args.quality,
+        args.n,
+        outdir,
+        timestamp,
+        reference_image=args.reference_image,
     )
-
-    paths: list[str] = []
-    for index, item in enumerate(result.data, start=1):
-        image_path = outdir / f"image_{index}.png"
-        image_path.write_bytes(decode_image(item))
-        paths.append(str(image_path))
-
-    metadata = {
-        "model": args.model,
-        "prompt": args.prompt,
-        "size": args.size,
-        "quality": args.quality,
-        "n": args.n,
-        "paths": paths,
-        "created_at": timestamp,
-    }
-    metadata_path = outdir / "metadata.json"
-    metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False))
-
     print(json.dumps(metadata, indent=2, ensure_ascii=False))
 
 
