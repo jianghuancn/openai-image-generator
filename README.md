@@ -31,6 +31,17 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
+Windows PowerShell setup:
+
+```powershell
+git clone https://github.com/jianghuancn/openai-image-generator.git
+cd openai-image-generator
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+copy .env.example .env
+```
+
 Edit `.env` and add your API key:
 
 ```bash
@@ -94,9 +105,34 @@ Generated files are saved under `outputs/<timestamp>/`.
 
 ## CLI usage
 
+You can run the project directly, use the packaged console command after editable install, or use the OS launchers in `scripts/`.
+
 ```bash
 python generate_image.py --help
 ```
+
+Install the cross-platform console entry points:
+
+```bash
+pip install -e .
+generate-image --help
+# or
+openai-image-generator --help
+```
+
+macOS launcher:
+
+```bash
+./scripts/generate-image.command --help
+```
+
+Windows launcher:
+
+```powershell
+.\scripts\generate-image.bat --help
+```
+
+The macOS and Windows launchers use the project `.venv` automatically when it exists, then forward all arguments to `generate_image.py`.
 
 Options:
 
